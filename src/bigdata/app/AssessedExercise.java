@@ -139,97 +139,30 @@ public static void main(String[] args) throws InterruptedException {
     	// Student's solution starts here
     	//----------------------------------------
 
+
 		JavaPairRDD<String, StockPrice> pricesByTicker =
-				prices.javaRDD()
-						.mapToPair(price -> new Tuple2<>(price.getStockTicker(), price));
+				prices.javaRDD().mapToPair(new PriceToPair());
+
 		JavaPairRDD<String, Iterable<StockPrice>> groupedPrices =
 				pricesByTicker.groupByKey();
-		System.out.println(groupedPrices.count());
 
+		JavaPairRDD<String, List<Double>> sortedClosePrices =
+				groupedPrices.mapValues(new SortAndExtractClosePrices());
 
-		JavaPairRDD<String, List<Double>> sortedClosePrices = groupedPrices.mapValues(pricesIterable -> {
-
-			List<StockPrice> priceList = new ArrayList<>();
-			pricesIterable.forEach(priceList::add);
-			priceList.sort(Comparator.comparing(
-					p -> TimeUtil.fromDate(p.getYear(), p.getMonth(), p.getDay())
-			));
-
-			List<Double> closePrices = new ArrayList<>();
-			for (StockPrice p : priceList) {
-				closePrices.add(p.getClosePrice());
-			}
-
-			return closePrices;
-		});
-		JavaPairRDD<String, AssetFeatures> assetFeatures = sortedClosePrices.mapValues(closePrices -> {
-
-			// need enough data for 1 year volatility
-			if (closePrices.size() < 251) return null;
-
-			List<Double> last251 = closePrices.subList(closePrices.size() - 251, closePrices.size());
-
-			Returns returnsCalc = new Returns();
-			double assetReturn = returnsCalc.calculate(5, closePrices);
-
-			Volitility volCalc = new Volitility();
-			double assetVol = volCalc.calculate(last251);
-
-			AssetFeatures features = new AssetFeatures();
-			features.setAssetReturn(assetReturn);
-			features.setAssetVolitility(assetVol);
-
-			return features;
-
-		}).filter(x -> x._2 != null);
+		JavaPairRDD<String, AssetFeatures> assetFeatures =
+				sortedClosePrices
+						.mapValues(new CalculateAssetFeatures())
+						.filter(new NonNullAssetFeaturesFilter());
 
 		JavaPairRDD<String, Tuple2<AssetFeatures, AssetMetadata>> joined =
 				assetFeatures.join(assetMetadata);
-		JavaPairRDD<String, AssetFeatures> withPERatio = joined.mapValues(tuple -> {
 
-			AssetFeatures features = tuple._1;
-			AssetMetadata metadata = tuple._2;
+		JavaPairRDD<String, Tuple2<AssetFeatures, AssetMetadata>> filtered =
+				joined.filter(new AssetFilterWithMeta(volatilityCeiling, peRatioThreshold));
 
-			double pe = metadata.getPriceEarningRatio();
-
-			// filter missing / invalid PE
-			if (pe == 0.0) return null;
-
-			features.setPeRatio(pe);
-
-			return features;
-
-		}).filter(x -> x._2 != null);
-		JavaPairRDD<String, AssetFeatures> filtered = withPERatio.filter(x ->
-				x._2.getAssetVolitility() < volatilityCeiling &&
-						x._2.getPeRatio() < peRatioThreshold
-		);
-
-		JavaPairRDD<String, Tuple2<AssetFeatures, AssetMetadata>> filteredWithMeta =
-				joined.mapValues(tuple -> {
-
-							AssetFeatures features = tuple._1;
-							AssetMetadata metadata = tuple._2;
-
-							double pe = metadata.getPriceEarningRatio();
-
-							if (pe == 0.0) return null;
-
-							features.setPeRatio(pe);
-
-							return new Tuple2<>(features, metadata);
-
-						})
-						.filter(x ->
-								x._2 != null &&
-										x._2._1.getAssetVolitility() < volatilityCeiling &&
-										x._2._1.getPeRatio() < peRatioThreshold
-						);
 		List<Tuple2<String, Tuple2<AssetFeatures, AssetMetadata>>> top5 =
-				filteredWithMeta.takeOrdered(
-						5,
-						new AssetReturnComparatorWithMeta()
-				);
+				filtered.takeOrdered(5, new AssetReturnComparatorWithMeta());
+
 		Asset[] finalAssets = new Asset[5];
 
 		for (int i = 0; i < top5.size(); i++) {
@@ -244,7 +177,6 @@ public static void main(String[] args) throws InterruptedException {
 			asset.setName(metadata.getName());
 			asset.setIndustry(metadata.getIndustry());
 			asset.setSector(metadata.getSector());
-
 			asset.setFeatures(features);
 
 			finalAssets[i] = asset;
