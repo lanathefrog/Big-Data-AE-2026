@@ -9,6 +9,7 @@ import java.io.OutputStreamWriter;
 import java.time.Instant;
 import java.util.Date;
 
+import bigdata.objects.*;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.sql.Dataset;
@@ -16,13 +17,16 @@ import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
-import bigdata.objects.AssetMetadata;
-import bigdata.objects.AssetRanking;
-import bigdata.objects.StockPrice;
 import bigdata.transformations.filters.NullPriceFilter;
 import bigdata.transformations.maps.PriceReaderMap;
 import bigdata.transformations.pairing.AssetMetadataPairing;
-
+import scala.Tuple2;
+import bigdata.util.TimeUtil;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Comparator;
+import bigdata.technicalindicators.Volitility;
+import bigdata.technicalindicators.Returns;
 public class AssessedExercise {
 
 public static void main(String[] args) throws InterruptedException {
@@ -134,10 +138,104 @@ public static void main(String[] args) throws InterruptedException {
     	//----------------------------------------
     	// Student's solution starts here
     	//----------------------------------------
-    	
-    	
-    	
-    	
+
+		System.out.println("Dataset size: "+prices.count());
+
+		System.out.println("Asset Metadata: "+assetMetadata.count());
+		JavaPairRDD<String, StockPrice> pricesByTicker =
+				prices.javaRDD()
+						.mapToPair(price -> new Tuple2<>(price.getStockTicker(), price));
+
+		System.out.println("Prices by ticker: "+pricesByTicker.count());
+		JavaPairRDD<String, Iterable<StockPrice>> groupedPrices =
+				pricesByTicker.groupByKey();
+		System.out.println(groupedPrices.count());
+
+
+		JavaPairRDD<String, List<Double>> sortedClosePrices = groupedPrices.mapValues(pricesIterable -> {
+
+			List<StockPrice> priceList = new ArrayList<>();
+			pricesIterable.forEach(priceList::add);
+
+			// sort by date
+			priceList.sort(Comparator.comparing(
+					p -> TimeUtil.fromDate(p.getYear(), p.getMonth(), p.getDay())
+			));
+
+			// extract close prices
+			List<Double> closePrices = new ArrayList<>();
+			for (StockPrice p : priceList) {
+				closePrices.add(p.getClosePrice());
+			}
+
+			return closePrices;
+		});
+		System.out.println("Assets with sorted price lists: " + sortedClosePrices.count());
+
+		System.out.println("Example price list size: " +
+				sortedClosePrices.take(1).get(0)._2.size());
+
+		JavaPairRDD<String, AssetFeatures> assetFeatures = sortedClosePrices.mapValues(closePrices -> {
+
+			// need enough data for 1 year volatility
+			if (closePrices.size() < 251) return null;
+
+			List<Double> last251 = closePrices.subList(closePrices.size() - 251, closePrices.size());
+			List<Double> last5 = closePrices.subList(closePrices.size() - 5, closePrices.size());
+
+			Returns returnsCalc = new Returns();
+			double assetReturn = returnsCalc.calculate(5, closePrices);
+
+			Volitility volCalc = new Volitility();
+			double assetVol = volCalc.calculate(last251);
+
+			AssetFeatures features = new AssetFeatures();
+			features.setAssetReturn(assetReturn);
+			features.setAssetVolitility(assetVol);
+
+			return features;
+
+		}).filter(x -> x._2 != null);
+
+		System.out.println("Assets with features: " + assetFeatures.count());
+		System.out.println(assetFeatures.take(1));
+
+		JavaPairRDD<String, Tuple2<AssetFeatures, AssetMetadata>> joined =
+				assetFeatures.join(assetMetadata);
+		System.out.println("Joined assets: " + joined.count());
+		JavaPairRDD<String, AssetFeatures> withPERatio = joined.mapValues(tuple -> {
+
+			AssetFeatures features = tuple._1;
+			AssetMetadata metadata = tuple._2;
+
+			double pe = metadata.getPriceEarningRatio();
+
+			// filter missing / invalid PE
+			if (pe == 0.0) return null;
+
+			features.setPeRatio(pe);
+
+			return features;
+
+		}).filter(x -> x._2 != null);
+		System.out.println("Assets with PE Ratio: " + withPERatio.count());
+
+		JavaPairRDD<String, AssetFeatures> filtered = withPERatio.filter(x ->
+				x._2.getAssetVolitility() < volatilityCeiling &&
+						x._2.getPeRatio() < peRatioThreshold
+		);
+
+		System.out.println("After all filters: " + filtered.count());
+		List<Tuple2<String, AssetFeatures>> top5 =
+				filtered.takeOrdered(
+						5,
+						new AssetReturnComparator()
+				);
+		for (Tuple2<String, AssetFeatures> t : top5) {
+			System.out.println(t._1 + " -> " + t._2.getAssetReturn());
+		}
+
+
     	AssetRanking finalRanking = new AssetRanking(); // ...One of these is what your Spark program should collect
     	
     	return finalRanking;
