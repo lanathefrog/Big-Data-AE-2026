@@ -26,6 +26,7 @@ import bigdata.transformations.pairing.AssetMetadataPairing;
 public class AssessedExercise {
 
 public static void main(String[] args) throws InterruptedException {
+
 		
 		//--------------------------------------------------------
 	    // Static Configuration
@@ -57,7 +58,6 @@ public static void main(String[] args) throws InterruptedException {
 				  .builder()
 				  .config(conf)
 				  .getOrCreate();
-	
 		
 		// Get the location of the asset pricing data
 		String pricesFile = System.getenv("BIGDATA_PRICES");
