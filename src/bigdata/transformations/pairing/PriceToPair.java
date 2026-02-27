@@ -1,4 +1,5 @@
-package bigdata.objects;
+package bigdata.transformations.pairing;
+import bigdata.objects.StockPrice;
 import org.apache.spark.api.java.function.PairFunction;
 import scala.Tuple2;
 

@@ -1,5 +1,6 @@
-package bigdata.objects;
+package bigdata.transformations.maps;
 
+import bigdata.objects.AssetFeatures;
 import org.apache.spark.api.java.function.Function;
 import java.util.List;
 import bigdata.technicalindicators.Returns;

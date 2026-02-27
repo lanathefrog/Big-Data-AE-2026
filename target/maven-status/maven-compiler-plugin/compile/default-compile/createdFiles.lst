@@ -1,0 +1,9 @@
+bigdata\transformations\pairing\PriceToPair.class
+bigdata\transformations\comparators\AssetReturnComparatorWithMeta.class
+bigdata\transformations\filters\NonNullAssetFeaturesFilter.class
+bigdata\transformations\reducers\LatestNPriceComb.class
+bigdata\transformations\maps\SortAndExtractClosePrices.class
+bigdata\transformations\comparators\AssetReturnComparator.class
+bigdata\transformations\filters\AssetFilterWithMeta.class
+bigdata\transformations\reducers\LatestNPriceSeq.class
+bigdata\transformations\maps\CalculateAssetFeatures.class

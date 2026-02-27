@@ -1,4 +1,5 @@
-package bigdata.objects;
+package bigdata.transformations.maps;
+import bigdata.objects.StockPrice;
 import org.apache.spark.api.java.function.Function;
 import java.util.*;
 import bigdata.util.TimeUtil;

@@ -10,6 +10,12 @@ import java.time.Instant;
 import java.util.Date;
 
 import bigdata.objects.*;
+import bigdata.transformations.comparators.AssetReturnComparatorWithMeta;
+import bigdata.transformations.filters.AssetFilterWithMeta;
+import bigdata.transformations.filters.NonNullAssetFeaturesFilter;
+import bigdata.transformations.maps.CalculateAssetFeatures;
+import bigdata.transformations.maps.SortAndExtractClosePrices;
+import bigdata.transformations.pairing.PriceToPair;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.sql.Dataset;
@@ -21,12 +27,9 @@ import bigdata.transformations.filters.NullPriceFilter;
 import bigdata.transformations.maps.PriceReaderMap;
 import bigdata.transformations.pairing.AssetMetadataPairing;
 import scala.Tuple2;
-import bigdata.util.TimeUtil;
+
 import java.util.List;
-import java.util.ArrayList;
-import java.util.Comparator;
-import bigdata.technicalindicators.Volitility;
-import bigdata.technicalindicators.Returns;
+
 public class AssessedExercise {
 
 public static void main(String[] args) throws InterruptedException {

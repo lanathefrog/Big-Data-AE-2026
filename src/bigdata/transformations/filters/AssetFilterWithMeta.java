@@ -1,5 +1,7 @@
-package bigdata.objects;
+package bigdata.transformations.filters;
 
+import bigdata.objects.AssetFeatures;
+import bigdata.objects.AssetMetadata;
 import org.apache.spark.api.java.function.Function;
 import scala.Tuple2;
 
