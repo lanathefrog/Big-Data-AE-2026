@@ -7,6 +7,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Date;
 
 import bigdata.objects.*;
@@ -146,9 +147,20 @@ public static void main(String[] args) throws InterruptedException {
 		JavaPairRDD<String, StockPrice> pricesByTicker =
 				prices.javaRDD().mapToPair(new PriceToPair());
 
-		JavaPairRDD<String, Iterable<StockPrice>> groupedPrices =
-				pricesByTicker.groupByKey();
+		JavaPairRDD<String, ArrayList<StockPrice>> groupedPrices =
+				pricesByTicker.aggregateByKey(
+						new ArrayList<StockPrice>(),
 
+						(list, price) -> {
+							list.add(price);
+							return list;
+						},
+
+						(list1, list2) -> {
+							list1.addAll(list2);
+							return list1;
+						}
+				);
 		JavaPairRDD<String, List<Double>> sortedClosePrices =
 				groupedPrices.mapValues(new SortAndExtractClosePrices());
 
