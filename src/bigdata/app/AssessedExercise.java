@@ -15,9 +15,7 @@ import bigdata.transformations.comparators.AssetReturnComparatorWithMeta;
 import bigdata.transformations.filters.AssetFilterWithMeta;
 import bigdata.transformations.filters.NonNullAssetFeaturesFilter;
 import bigdata.transformations.filters.PriceDateFilter;
-import bigdata.transformations.maps.CalculateAssetFeatures;
-import bigdata.transformations.maps.SortAndExtractClosePrices;
-import bigdata.transformations.pairing.PriceToPair;
+import bigdata.transformations.maps.*;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -27,10 +25,10 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
 import bigdata.transformations.filters.NullPriceFilter;
-import bigdata.transformations.maps.PriceReaderMap;
 import bigdata.transformations.pairing.AssetMetadataPairing;
 import scala.Tuple2;
 import bigdata.util.TimeUtil;
+import bigdata.transformations.maps.CalculateAssetFeatures;
 
 import java.util.List;
 
@@ -145,55 +143,69 @@ public static void main(String[] args) throws InterruptedException {
     	//----------------------------------------
     	// Student's solution starts here
     	//----------------------------------------
+
+
+		// Define a time window of 2 years (730 days) ending at the dataset end date
+		// This guarantees us at least 251 trading days in the window, which is the minimum required to calculate the volatility
 		Instant endDate = TimeUtil.fromDate(datasetEndDate);
 		Instant startDate = endDate.minusSeconds(730L * 24 * 60 * 60);
 
+
+		// Filter the prices to only include those within the specified date range
 		JavaRDD<StockPrice> filteredPrices =
 				prices.javaRDD().filter(new PriceDateFilter(startDate, endDate));
 
-		JavaPairRDD<String, StockPrice> pricesByTicker =
-				filteredPrices.mapToPair(new PriceToPair());
+		// Convert the filtered prices into pairs of (stock ticker, (date, close price))
+		// Only the needed information is kept to save memory and speed up the processing
+		JavaPairRDD<String, Tuple2<Instant, Double>> pricesByTicker =
+				filteredPrices.mapToPair(new PriceToDateClosePair());
 
 
-		JavaPairRDD<String, ArrayList<StockPrice>> groupedPrices =
+		// Group all price records for each asset
+		JavaPairRDD<String, ArrayList<Tuple2<Instant, Double>>> groupedPrices =
 				pricesByTicker.aggregateByKey(
-						new ArrayList<StockPrice>(),
-
-						(list, price) -> {
-							list.add(price);
-							return list;
-						},
-
-						(list1, list2) -> {
-							list1.addAll(list2);
-							return list1;
-						}
+						new ArrayList<>(),
+						(list, value) -> { list.add(value); return list; },
+						(l1, l2) -> { l1.addAll(l2); return l1; }
 				);
+		// Sort the price records for each asset by date
+		// Extract the close prices into a list
 		JavaPairRDD<String, List<Double>> sortedClosePrices =
-				groupedPrices.mapValues(new SortAndExtractClosePrices());
+				groupedPrices.mapValues(new SortAndExtractClosePricesFromTuple());
 
+
+		// For each asset, calculate the return and volatility
+		// Assets that have insufficient price history will be filtered out in the next step
+		// Caching is used for optimization, as it's the most expensive operation
 		JavaPairRDD<String, AssetFeatures> assetFeatures =
 				sortedClosePrices
 						.mapValues(new CalculateAssetFeatures())
-						.filter(new NonNullAssetFeaturesFilter());
+						.filter(new NonNullAssetFeaturesFilter())
+						.cache();
 
+		// Join calculated features and metadata for each asset
 		JavaPairRDD<String, Tuple2<AssetFeatures, AssetMetadata>> joined =
 				assetFeatures.join(assetMetadata);
 
+		// Filter assets based on the specified volatility and PE ratio thresholds
 		JavaPairRDD<String, Tuple2<AssetFeatures, AssetMetadata>> filtered =
 				joined.filter(new AssetFilterWithMeta(volatilityCeiling, peRatioThreshold));
 
+		// Sort the remaining assets by return and take the top 5
 		List<Tuple2<String, Tuple2<AssetFeatures, AssetMetadata>>> top5 =
 				filtered.takeOrdered(5, new AssetReturnComparatorWithMeta());
 
+		// Create the final Asset objects for the top 5 assets
 		Asset[] finalAssets = new Asset[5];
 
 		for (int i = 0; i < top5.size(); i++) {
 
+			// Extract the ticker, features, and metadata for each of the top 5 assets
 			String ticker = top5.get(i)._1;
 			AssetFeatures features = top5.get(i)._2._1;
 			AssetMetadata metadata = top5.get(i)._2._2;
 
+			// Create an Asset object and populate it with the extracted information
 			Asset asset = new Asset();
 
 			asset.setTicker(ticker);
@@ -205,12 +217,13 @@ public static void main(String[] args) throws InterruptedException {
 			finalAssets[i] = asset;
 		}
 
+		// Create the final AssetRanking object and set the ranked assets
 		AssetRanking finalRanking = new AssetRanking();
 		finalRanking.setAssetRanking(finalAssets);
 
-    	// ...One of these is what your Spark program should collect
-    	
     	return finalRanking;
+
+		// Thank you for your attention :)
     	
     	
     	

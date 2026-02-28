@@ -7,7 +7,14 @@ import bigdata.technicalindicators.Returns;
 import bigdata.technicalindicators.Volitility;
 
 /**
- * Calculates return and volatility for an asset.
+ * Calculates indicators required for the ranking an asset.
+ *
+ * Input: List of close prices for an asset
+ * Output: AssetFeatures object containing the return and volatility of the asset
+ *
+ * Requires at least 251 trading days, otherwise return null (remove later in the pipeline)
+ * Full history is used to calculate the return
+ * Violatility is calculated using the last 251 trading days
  */
 public class CalculateAssetFeatures implements Function<List<Double>, AssetFeatures> {
 

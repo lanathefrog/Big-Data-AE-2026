@@ -6,6 +6,12 @@ import org.apache.spark.api.java.function.Function;
 
 import java.time.Instant;
 
+/**
+ * This filter is used to filter prices that are outside of a specified date range.
+ *
+ * Only prices that are within the date range will be kept, and the rest will be filtered out.
+ *
+ */
 public class PriceDateFilter implements Function<StockPrice, Boolean> {
 
     private final Instant minDate;
@@ -25,6 +31,7 @@ public class PriceDateFilter implements Function<StockPrice, Boolean> {
                 price.getDay()
         );
 
+        // Check if the price date is within the specified date range
         return !priceDate.isBefore(minDate) && !priceDate.isAfter(maxDate);
     }
 }
