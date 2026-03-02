@@ -17,6 +17,7 @@ public class PriceToDateClosePair implements
     @Override
     public Tuple2<String, Tuple2<Instant, Double>> call(StockPrice p) {
 
+        // Convert the year, month, and day fields of the StockPrice object into a single Instant representing the date
         Instant date = TimeUtil.fromDate(
                 p.getYear(),
                 p.getMonth(),

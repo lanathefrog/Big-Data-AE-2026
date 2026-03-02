@@ -19,7 +19,7 @@ public class AssetMetadataPairing implements PairFunction<Row,String,AssetMetada
 	@Override
 	public Tuple2<String, AssetMetadata> call(Row row) throws Exception {
 		AssetMetadata assetMeta = new AssetMetadata(row);
-		return new Tuple2<String, AssetMetadata>(assetMeta.getSymbol(), assetMeta);
+		return new Tuple2<>(assetMeta.getSymbol(), assetMeta);
 	}
 
 
