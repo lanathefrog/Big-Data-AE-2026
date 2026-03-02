@@ -145,7 +145,7 @@ public static void main(String[] args) throws InterruptedException {
     	//----------------------------------------
 
 
-		// Define a time window of 2 years (730 days) ending at the dataset end date
+		// Define a time window of 730 days ending at the dataset end date
 		// This guarantees us at least 251 trading days in the window, which is the minimum required to calculate the volatility
 		Instant endDate = TimeUtil.fromDate(datasetEndDate);
 		Instant startDate = endDate.minusSeconds(730L * 24 * 60 * 60);
@@ -176,12 +176,10 @@ public static void main(String[] args) throws InterruptedException {
 
 		// For each asset, calculate the return and volatility
 		// Assets that have insufficient price history will be filtered out in the next step
-		// Caching is used for optimization, as it's the most expensive operation
 		JavaPairRDD<String, AssetFeatures> assetFeatures =
 				sortedClosePrices
 						.mapValues(new CalculateAssetFeatures())
-						.filter(new NonNullAssetFeaturesFilter())
-						.cache();
+						.filter(new NonNullAssetFeaturesFilter());
 
 		// Join calculated features and metadata for each asset
 		JavaPairRDD<String, Tuple2<AssetFeatures, AssetMetadata>> joined =
